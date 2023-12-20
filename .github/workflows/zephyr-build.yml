@@ -18,8 +18,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          path: /workdir/megabit-coproc
       - name: cmake configuration
         run: cmake -Bbuild -GNinja
       - name: build it
