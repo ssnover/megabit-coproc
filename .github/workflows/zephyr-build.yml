@@ -12,8 +12,6 @@ jobs:
       run:
         shell: bash
     container: zephyrprojectrtos/ci:v0.26.6
-    env:
-      CMAKE_PREFIX_PATH: /workdir
     timeout-minutes: 10
     steps:
       - name: checkout repo
@@ -29,7 +27,7 @@ jobs:
 
       - name: cmake configuration
         working-directory: megabit-coproc
-        run: cmake -Bbuild -GNinja
+        run: CMAKE_PREFIX_PATH="$(pwd)/.." cmake -Bbuild -GNinja
 
       - name: build firmware application image
         working-directory: megabit-coproc
