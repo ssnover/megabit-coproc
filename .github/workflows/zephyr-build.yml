@@ -16,5 +16,7 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-      - name: West build
-        run: west build
+      - name: cmake configuration
+        run: cmake -Bbuild -GNinja
+      - name: build it
+        run: ninja -Cbuild
