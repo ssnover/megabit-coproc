@@ -16,9 +16,21 @@ jobs:
       CMAKE_PREFIX_PATH: /opt/toolchains
     timeout-minutes: 10
     steps:
-      - name: Checkout repo
+      - name: checkout repo
         uses: actions/checkout@v4
+        with:
+          path: megabit-coproc
+
+      - name: init workspace
+        working-directory: megabit-coproc
+        run: |
+          west init
+          west update -o=--depth=1 -n
+
       - name: cmake configuration
+        working-directory: megabit-coproc
         run: cmake -Bbuild -GNinja
-      - name: build it
+
+      - name: build firmware application image
+        working-directory: megabit-coproc
         run: ninja -Cbuild
