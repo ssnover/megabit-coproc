@@ -13,7 +13,7 @@ jobs:
         shell: bash
     container: zephyrprojectrtos/ci:v0.26.6
     env:
-      CMAKE_PREFIX_PATH: /opt/toolchains
+      CMAKE_PREFIX_PATH: /workdir
     timeout-minutes: 10
     steps:
       - name: checkout repo
@@ -24,7 +24,7 @@ jobs:
       - name: init workspace
         working-directory: megabit-coproc
         run: |
-          west init
+          west init -l .
           west update -o=--depth=1 -n
 
       - name: cmake configuration
