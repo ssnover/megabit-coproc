@@ -12,10 +12,14 @@ jobs:
       run:
         shell: bash
     container: zephyrprojectrtos/ci:v0.26.6
+    env:
+      CMAKE_PREFIX_PATH: /opt/toolchains
     timeout-minutes: 10
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          path: /workdir/megabit-coproc
       - name: cmake configuration
         run: cmake -Bbuild -GNinja
       - name: build it
