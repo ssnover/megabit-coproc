@@ -27,7 +27,7 @@ jobs:
 
       - name: cmake configuration
         working-directory: megabit-coproc
-        run: CMAKE_PREFIX_PATH="$(pwd)/.." cmake -Bbuild -GNinja
+        run: source ../zephyr/zephyr-env.sh && cmake -Bbuild -GNinja
 
       - name: build firmware application image
         working-directory: megabit-coproc
