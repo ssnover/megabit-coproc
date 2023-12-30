@@ -1,0 +1,22 @@
+menu "USB sample options"
+    depends on USB_DEVICE_STACK_NEXT
+
+config USB_SERIAL_MANUFACTURER
+    string "USB device manufacturer string"
+    default "Snostorm Labs"
+    help
+        USB device manufacturer string.
+
+config USB_SERIAL_PRODUCT
+    string "USB device product string"
+    default "Megabit coproc"
+    help
+        USB device product string.
+
+config USB_SERIAL_PID
+    hex "USB device product ID"
+    default 0x1337
+    help
+        USB device product ID.
+
+endmenu
