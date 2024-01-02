@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <zephyr/usb/usbd.h>
+#include "zephyr-usbd-wrapper.h"
 
 using UsbContext = struct usbd_contex;
 

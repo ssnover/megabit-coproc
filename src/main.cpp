@@ -24,6 +24,7 @@ constexpr uint32_t RING_BUFFER_SIZE(1024);
 std::array<uint8_t, RING_BUFFER_SIZE> ring_buffer_backend;
 struct ring_buf ring_buffer;
 
+static bool data_received;
 static bool rx_throttled;
 
 UsbContext * usb_serial;
@@ -58,26 +59,27 @@ void usb_interrupt(const struct device * dev, void * /* user_data */) {
                 continue;
             }
 
-            auto rx_bytes = uart_fifo_read(dev, buffer, len);
+            auto rx_bytes = uart_fifo_read(dev, buffer.data(), len);
             if (rx_bytes < 0) {
                 LOG_ERR("Failed to read UART FIFO: %d", rx_bytes);
                 rx_bytes = 0;
             }
 
             auto ring_buf_tx_bytes = ring_buf_put(&ring_buffer, buffer.data(), rx_bytes);
-            if (ring_buf_tx_bytes < rx_bytes) {
+            if ((int64_t)ring_buf_tx_bytes < rx_bytes) {
                 LOG_ERR("Drop %u bytes", ring_buf_tx_bytes - rx_bytes);
             }
 
             LOG_DBG("tty fifo -> ringbuf %d bytes", ring_buf_tx_bytes);
             if (ring_buf_tx_bytes) {
+                data_received = true;
                 uart_irq_tx_enable(dev);
             }
         }
 
         if (uart_irq_tx_ready(dev)) {
             std::array<uint8_t, 64> buffer;
-            auto ring_buf_rx_bytes = ring_buf_get(&ring_buffer, buffer.data(), buffer.size());
+            uint32_t ring_buf_rx_bytes = ring_buf_get(&ring_buffer, buffer.data(), buffer.size());
             if (ring_buf_rx_bytes == 0) {
                 LOG_DBG("Ring buffer empty, disable TX IRQ");
                 uart_irq_tx_disable(dev);
@@ -89,8 +91,8 @@ void usb_interrupt(const struct device * dev, void * /* user_data */) {
                 rx_throttled = false;
             }
 
-            auto tx_bytes = uart_fifo_fill(dev, buffer.data(), ring_buf_rx_bytes);
-            if (tx_bytes < ring_buf_rx_bytes) {
+            int32_t tx_bytes = uart_fifo_fill(dev, buffer.data(), ring_buf_rx_bytes);
+            if (tx_bytes < (int64_t)ring_buf_rx_bytes) {
                 LOG_ERR("Drop %d bytes", ring_buf_rx_bytes - tx_bytes);
             }
 
@@ -101,6 +103,18 @@ void usb_interrupt(const struct device * dev, void * /* user_data */) {
 
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
+void flash_led_forever() {
+    bool led_state = true;
+    while (true) {
+        gpio_pin_toggle_dt(&led);
+        led_state = !led_state;
+        LOG_INF("LED state: %s", led_state ? "ON" : "OFF");
+        k_msleep(SLEEP_TIME_MS);
+    }
+}
+
+uint32_t dtr = 0;
+
 int main() {
     if (!gpio_is_ready_dt(&led)) {
         return 0;
@@ -110,7 +124,7 @@ int main() {
         return 0;
     }
 
-    const struct device * dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+    const struct device * dev = DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0));
     if (!device_is_ready(dev)) {
         LOG_ERR("CDC ACM device not ready");
         return 0;
@@ -122,43 +136,37 @@ int main() {
     }
 
     ring_buf_init(&ring_buffer, ring_buffer_backend.size(), ring_buffer_backend.data());
-    LOG_INF("Wait for DTR");
 
     while (true) {
-        uint32_t dtr = 0;
+        gpio_pin_toggle_dt(&led);
         uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
         if (dtr) {
             break;
         } else {
-            k_sleep(K_MSEC(100));
+            k_msleep(100);
         }
     }
+
+    flash_led_forever();
+
+    uart_line_ctrl_set(dev, UART_LINE_CTRL_DCD, 1);
+    uart_line_ctrl_set(dev, UART_LINE_CTRL_DSR, 1);
 
     LOG_INF("DTR set");
     // Wait 100ms for the host to do all settings
     k_msleep(100);
 
-    uint32_t baudrate = 0;
-    if (int err = uart_line_ctrl_get(dev, UART_LINE_CTRL_BAUD_RATE, &baudrate); err) {
-        LOG_WRN("Failed to get baudrate: %d", ret);
-    } else {
-        LOG_INF("Baudrate detected: %d", baudrate);
-    }
+    // uint32_t baudrate = 0;
+    // if (int err = uart_line_ctrl_get(dev, UART_LINE_CTRL_BAUD_RATE, &baudrate); err) {
+    //     LOG_WRN("Failed to get baudrate: %d", err);
+    // } else {
+    //     LOG_INF("Baudrate detected: %d", baudrate);
+    // }
 
     uart_irq_callback_set(dev, usb_interrupt);
     uart_irq_rx_enable(dev);
 
-    bool led_state = true;
-    while (true) {
-        auto toggle_result = gpio_pin_toggle_dt(&led);
-        if (toggle_result < 0) {
-            return 0;
-        }
-
-        led_state = !led_state;
-        LOG_INF("LED state: %s", led_state ? "ON" : "OFF");
-        k_msleep(SLEEP_TIME_MS);
-    }
+    flash_led_forever();
 
     return 0;
 }

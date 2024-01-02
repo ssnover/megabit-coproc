@@ -1,25 +1,26 @@
 #include "usb.hpp"
+#include "zephyr-usbd-wrapper.h"
 #include <cstdint>
 #include <zephyr/device.h>
-#include <zephyr/usb/usbd.h>
 #include <zephyr/sys/iterable_sections.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(usb);
 
-namespace {
+constexpr uint16_t COPROC_USB_PID(0x27de);
+constexpr uint16_t COPROC_USB_VID(0x16c0);
 
-constexpr uint16_t ZEPHYR_PROJECT_USB_VID(0x2fe3);
-
-USBD_DEVICE_DEFINE(usb_serial,
+USBD_DEVICE_DEFINE(
+    usb_serial,
     DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
-    ZEPHYR_PROJECT_USB_VID, CONFIG_USB_SERIAL_PID);
+    COPROC_USB_VID, 
+    COPROC_USB_PID
+);
 USBD_DESC_LANG_DEFINE(sample_lang);
-USBD_DESC_MANUFACTURER_DEFINE(sample_mfr, CONFIG_USB_SERIAL_MANUFACTURER);
-USBD_PRODUCT_DEFINE(sample_product, CONFIG_USB_SERIAL_PRODUCT);
-USBD_DESC_SERIAL_NUMBER_DEFINE(sample_sn, "0123456789ABCDEF");
-
-} // anonymous namespace
+USBD_DESC_MANUFACTURER_DEFINE(sample_mfr, "Snostorm Labs");
+USBD_DESC_PRODUCT_DEFINE(sample_product, "Megabit Coproc");
+USBD_DESC_SERIAL_NUMBER_DEFINE(sample_sn, "1234567890");
+USBD_CONFIGURATION_DEFINE(sample_config, 0, 125);
 
 UsbContext * init_usb_device() {
     if (int err = usbd_add_descriptor(&usb_serial, &sample_lang); err) {
@@ -42,6 +43,11 @@ UsbContext * init_usb_device() {
         return nullptr;
     }
 
+    if (int err = usbd_add_configuration(&usb_serial, &sample_config); err) {
+        LOG_ERR("Failed to add configuration: %d", err);
+        return nullptr;
+    }
+
     STRUCT_SECTION_FOREACH(usbd_class_node, node) {
         if (int err = usbd_register_class(&usb_serial, node->name, 1); err) {
             LOG_ERR("Failed to register %s: %d", node->name, err);
@@ -51,11 +57,7 @@ UsbContext * init_usb_device() {
         LOG_DBG("Register %s", node->name);
     }
 
-    if (IS_ENABLED(CONFIG_USBD_CDC_ACM_CLASS) || IS_ENABLED(CONFIG_USBD_CDC_ECM_CLASS)) {
-        usbd_device_set_code_triple(&usb_serial, USB_BCC_MISCELLANEOUS, 0x02, 0x01);
-    } else {
-        usbd_device_set_code_triple(&usb_serial, 0, 0, 0);
-    }
+    usbd_device_set_code_triple(&usb_serial, USB_BCC_MISCELLANEOUS, 0x02, 0x01);
 
     if (int err = usbd_init(&usb_serial); err) {
         LOG_ERR("Failed to initialize device support");
