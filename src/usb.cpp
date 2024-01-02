@@ -1,68 +1,102 @@
+/*
+ * Copyright (c) 2023 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "usb.hpp"
-#include "zephyr-usbd-wrapper.h"
-#include <cstdint>
+#include <stdint.h>
 #include <zephyr/device.h>
 #include <zephyr/sys/iterable_sections.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(usb);
+LOG_MODULE_REGISTER(usbd_sample_config);
 
-constexpr uint16_t COPROC_USB_PID(0x27de);
-constexpr uint16_t COPROC_USB_VID(0x16c0);
+#define ZEPHYR_PROJECT_USB_VID		0x27ed
+#define ZEPHYR_PROJECT_USB_PID      0x5000
 
-USBD_DEVICE_DEFINE(
-    usb_serial,
-    DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
-    COPROC_USB_VID, 
-    COPROC_USB_PID
-);
+USBD_DEVICE_DEFINE(sample_usbd,
+		   DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
+		   ZEPHYR_PROJECT_USB_VID, ZEPHYR_PROJECT_USB_PID);
+
 USBD_DESC_LANG_DEFINE(sample_lang);
 USBD_DESC_MANUFACTURER_DEFINE(sample_mfr, "Snostorm Labs");
-USBD_DESC_PRODUCT_DEFINE(sample_product, "Megabit Coproc");
-USBD_DESC_SERIAL_NUMBER_DEFINE(sample_sn, "1234567890");
-USBD_CONFIGURATION_DEFINE(sample_config, 0, 125);
+USBD_DESC_PRODUCT_DEFINE(sample_product, "Megabit coproc");
+USBD_DESC_SERIAL_NUMBER_DEFINE(sample_sn, "0123456789ABCDEF");
 
-UsbContext * init_usb_device() {
-    if (int err = usbd_add_descriptor(&usb_serial, &sample_lang); err) {
-        LOG_ERR("Failed to initialize lang descriptor: %d", err);
-        return nullptr;
-    }
+static const uint8_t attributes = (IS_ENABLED(CONFIG_SAMPLE_USBD_SELF_POWERED) ?
+				   USB_SCD_SELF_POWERED : 0) |
+				  (IS_ENABLED(CONFIG_SAMPLE_USBD_REMOTE_WAKEUP) ?
+				   USB_SCD_REMOTE_WAKEUP : 0);
 
-    if (int err = usbd_add_descriptor(&usb_serial, &sample_mfr); err) {
-        LOG_ERR("Failed to initalize manufacturer descriptor: %d", err);
-        return nullptr;
-    }
+USBD_CONFIGURATION_DEFINE(sample_config,
+			  attributes,
+			  125);
 
-    if (int err = usbd_add_descriptor(&usb_serial, &sample_product); err) {
-        LOG_ERR("Failed to initialize product descriptor: %d", err);
-        return nullptr;
-    }
+struct usbd_contex *sample_usbd_init_device(void)
+{
+	int err;
 
-    if (int err = usbd_add_descriptor(&usb_serial, &sample_sn); err) {
-        LOG_ERR("Failed to initialize SN descriptor: %d", err);
-        return nullptr;
-    }
+	err = usbd_add_descriptor(&sample_usbd, &sample_lang);
+	if (err) {
+		LOG_ERR("Failed to initialize language descriptor (%d)", err);
+		return NULL;
+	}
 
-    if (int err = usbd_add_configuration(&usb_serial, &sample_config); err) {
-        LOG_ERR("Failed to add configuration: %d", err);
-        return nullptr;
-    }
+	err = usbd_add_descriptor(&sample_usbd, &sample_mfr);
+	if (err) {
+		LOG_ERR("Failed to initialize manufacturer descriptor (%d)", err);
+		return NULL;
+	}
 
-    STRUCT_SECTION_FOREACH(usbd_class_node, node) {
-        if (int err = usbd_register_class(&usb_serial, node->name, 1); err) {
-            LOG_ERR("Failed to register %s: %d", node->name, err);
-            return nullptr;
-        }
+	err = usbd_add_descriptor(&sample_usbd, &sample_product);
+	if (err) {
+		LOG_ERR("Failed to initialize product descriptor (%d)", err);
+		return NULL;
+	}
 
-        LOG_DBG("Register %s", node->name);
-    }
+	err = usbd_add_descriptor(&sample_usbd, &sample_sn);
+	if (err) {
+		LOG_ERR("Failed to initialize SN descriptor (%d)", err);
+		return NULL;
+	}
 
-    usbd_device_set_code_triple(&usb_serial, USB_BCC_MISCELLANEOUS, 0x02, 0x01);
+	err = usbd_add_configuration(&sample_usbd, &sample_config);
+	if (err) {
+		LOG_ERR("Failed to add configuration (%d)", err);
+		return NULL;
+	}
 
-    if (int err = usbd_init(&usb_serial); err) {
-        LOG_ERR("Failed to initialize device support");
-        return nullptr;
-    }
+	STRUCT_SECTION_FOREACH(usbd_class_node, node) {
+		/* Pull everything that is enabled in our configuration. */
+		err = usbd_register_class(&sample_usbd, node->name, 1);
+		if (err) {
+			LOG_ERR("Failed to register %s (%d)", node->name, err);
+			return NULL;
+		}
 
-    return &usb_serial;
+		LOG_DBG("Register %s", node->name);
+	}
+
+	/* Always use class code information from Interface Descriptors */
+	if (IS_ENABLED(CONFIG_USBD_CDC_ACM_CLASS) ||
+	    IS_ENABLED(CONFIG_USBD_CDC_ECM_CLASS)) {
+		/*
+		 * Class with multiple interfaces have an Interface
+		 * Association Descriptor available, use an appropriate triple
+		 * to indicate it.
+		 */
+		usbd_device_set_code_triple(&sample_usbd,
+					    USB_BCC_MISCELLANEOUS, 0x02, 0x01);
+	} else {
+		usbd_device_set_code_triple(&sample_usbd, 0, 0, 0);
+	}
+
+	err = usbd_init(&sample_usbd);
+	if (err) {
+		LOG_ERR("Failed to initialize device support");
+		return NULL;
+	}
+
+	return &sample_usbd;
 }
