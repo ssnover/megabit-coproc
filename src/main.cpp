@@ -135,23 +135,15 @@ int main(void)
         return 0;
     }
 
-	const struct device *dev;
 	uint32_t baudrate, dtr = 0U;
-	int ret;
 
-	dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+	const struct device *dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 	if (!device_is_ready(dev)) {
 		LOG_ERR("CDC ACM device not ready");
 		return 0;
 	}
 
-#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
-		ret = enable_usb_device_next();
-#else
-		ret = usb_enable(NULL);
-#endif
-
-	if (ret != 0) {
+	if (int ret = enable_usb_device_next(); ret != 0) {
 		LOG_ERR("Failed to enable USB");
 		return 0;
 	}
@@ -173,29 +165,24 @@ int main(void)
 	LOG_INF("DTR set");
 
 	/* They are optional, we use them to test the interrupt endpoint */
-	ret = uart_line_ctrl_set(dev, UART_LINE_CTRL_DCD, 1);
-	if (ret) {
+	if (int ret = uart_line_ctrl_set(dev, UART_LINE_CTRL_DCD, 1); ret) {
 		LOG_WRN("Failed to set DCD, ret code %d", ret);
 	}
 
-	ret = uart_line_ctrl_set(dev, UART_LINE_CTRL_DSR, 1);
-	if (ret) {
+	if (int ret = uart_line_ctrl_set(dev, UART_LINE_CTRL_DSR, 1); ret) {
 		LOG_WRN("Failed to set DSR, ret code %d", ret);
 	}
 
 	/* Wait 100ms for the host to do all settings */
 	k_msleep(100);
 
-	ret = uart_line_ctrl_get(dev, UART_LINE_CTRL_BAUD_RATE, &baudrate);
-	if (ret) {
+	if (int ret = uart_line_ctrl_get(dev, UART_LINE_CTRL_BAUD_RATE, &baudrate); ret) {
 		LOG_WRN("Failed to get baudrate, ret code %d", ret);
 	} else {
 		LOG_INF("Baudrate detected: %d", baudrate);
 	}
 
 	uart_irq_callback_set(dev, interrupt_handler);
-
-	/* Enable rx interrupts */
 	uart_irq_rx_enable(dev);
 
     bool led_state = true;
