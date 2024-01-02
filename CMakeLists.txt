@@ -5,4 +5,12 @@ set(BOARD arduino_nano_33_ble)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(megabit-coproc)
 
-target_sources(app PRIVATE src/main.cpp)
+target_sources(app
+  PRIVATE 
+    src/main.cpp
+    src/usb.cpp
+)
+target_include_directories(app
+  PRIVATE
+    src
+)
