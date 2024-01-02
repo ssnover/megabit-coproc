@@ -1,17 +1,3 @@
-/*
- * Copyright (c) 2019 Intel Corporation
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
- * @file
- * @brief Sample echo app for CDC ACM class
- *
- * Sample app for USB CDC ACM class driver. The received data is echoed back
- * to the serial port.
- */
-
 #include "usb.hpp"
 #include <algorithm>
 #include <array>
@@ -42,46 +28,45 @@ static UsbContext *usb_serial;
 
 static int enable_usb_device_next()
 {
-	usb_serial = init_usb_device();
-	if (usb_serial == NULL) {
-		LOG_ERR("Failed to initialize USB device");
-		return -ENODEV;
-	}
+    usb_serial = init_usb_device();
+    if (usb_serial == nullptr) {
+	    LOG_ERR("Failed to initialize USB device");
+	    return -ENODEV;
+    }
 
-	if (int err = usbd_enable(usb_serial); err) {
-		LOG_ERR("Failed to enable device support");
-		return err;
-	}
+    if (int err = usbd_enable(usb_serial); err) {
+	    LOG_ERR("Failed to enable device support");
+	    return err;
+    }
 
-	LOG_DBG("USB device support enabled");
-
-	return 0;
+    LOG_DBG("USB device support enabled");
+    return 0;
 }
 
-static void interrupt_handler(const struct device *dev, void * /* user_data */)
+static void usb_interrupt(const struct device * dev, void * /* user_data */)
 {
 	while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
 		if (!rx_throttled && uart_irq_rx_ready(dev)) {
 			uint8_t buffer[64];
-			size_t len = std::min(ring_buf_space_get(&ringbuf),
-					 sizeof(buffer));
+			size_t len = std::min(ring_buf_space_get(&ringbuf), sizeof(buffer));
 
 			if (len == 0) {
 				/* Throttle because ring buffer is full */
+                // TODO Send message when this occurs
 				uart_irq_rx_disable(dev);
 				rx_throttled = true;
 				continue;
 			}
 
-			int bytes_received = uart_fifo_read(dev, buffer, len);
-			if (bytes_received < 0) {
+			int bytes_rx = uart_fifo_read(dev, buffer, len);
+			if (bytes_rx < 0) {
 				LOG_ERR("Failed to read UART FIFO");
-				bytes_received = 0;
+				bytes_rx = 0;
 			};
 
-			int bytes_written = ring_buf_put(&ringbuf, buffer, bytes_received);
-			if (bytes_written < bytes_received) {
-				LOG_ERR("Drop %u bytes", bytes_received - bytes_written);
+			int bytes_written = ring_buf_put(&ringbuf, buffer, bytes_rx);
+			if (bytes_written < bytes_rx) {
+				LOG_ERR("Drop %u bytes", bytes_rx - bytes_written);
 			}
 
 			LOG_DBG("tty fifo -> ringbuf %d bytes", bytes_written);
@@ -117,7 +102,7 @@ static void interrupt_handler(const struct device *dev, void * /* user_data */)
 
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
-int main(void)
+int main()
 {
     if (!gpio_is_ready_dt(&led)) {
         return 0;
@@ -126,8 +111,6 @@ int main(void)
     if (int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE); ret < 0) {
         return 0;
     }
-
-	uint32_t baudrate, dtr = 0U;
 
 	const struct device *dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 	if (!device_is_ready(dev)) {
@@ -145,6 +128,7 @@ int main(void)
 	LOG_INF("Wait for DTR");
 
 	while (true) {
+        uint32_t dtr = 0;
 		uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
 		if (dtr) {
 			break;
@@ -166,13 +150,14 @@ int main(void)
 	/* Wait 100ms for the host to do all settings */
 	k_msleep(100);
 
+    uint32_t baudrate = 0;
 	if (int ret = uart_line_ctrl_get(dev, UART_LINE_CTRL_BAUD_RATE, &baudrate); ret) {
 		LOG_WRN("Failed to get baudrate, ret code %d", ret);
 	} else {
 		LOG_INF("Baudrate detected: %d", baudrate);
 	}
 
-	uart_irq_callback_set(dev, interrupt_handler);
+	uart_irq_callback_set(dev, usb_interrupt);
 	uart_irq_rx_enable(dev);
 
     bool led_state = true;
