@@ -13,6 +13,8 @@
  */
 
 #include "usb.hpp"
+#include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
@@ -21,37 +23,32 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/ring_buffer.h>
-
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/usbd.h>
 #include <zephyr/logging/log.h>
+
 LOG_MODULE_REGISTER(megabit, LOG_LEVEL_INF);
 
 #define LED0_NODE DT_ALIAS(led0)
 constexpr uint32_t SLEEP_TIME_MS(1000);
 
-#define RING_BUF_SIZE 1024
-uint8_t ring_buffer[RING_BUF_SIZE];
-
+constexpr uint32_t RING_BUFFER_SIZE(1024);
+std::array<uint8_t, RING_BUFFER_SIZE> ring_buffer;
 struct ring_buf ringbuf;
 
 static bool rx_throttled;
 
-#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
-static UsbContext *sample_usbd;
+static UsbContext *usb_serial;
 
-static int enable_usb_device_next(void)
+static int enable_usb_device_next()
 {
-	int err;
-
-	sample_usbd = init_usb_device();
-	if (sample_usbd == NULL) {
+	usb_serial = init_usb_device();
+	if (usb_serial == NULL) {
 		LOG_ERR("Failed to initialize USB device");
 		return -ENODEV;
 	}
 
-	err = usbd_enable(sample_usbd);
-	if (err) {
+	if (int err = usbd_enable(usb_serial); err) {
 		LOG_ERR("Failed to enable device support");
 		return err;
 	}
@@ -60,17 +57,13 @@ static int enable_usb_device_next(void)
 
 	return 0;
 }
-#endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT) */
 
-static void interrupt_handler(const struct device *dev, void *user_data)
+static void interrupt_handler(const struct device *dev, void * /* user_data */)
 {
-	ARG_UNUSED(user_data);
-
 	while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
 		if (!rx_throttled && uart_irq_rx_ready(dev)) {
-			int recv_len, rb_len;
 			uint8_t buffer[64];
-			size_t len = MIN(ring_buf_space_get(&ringbuf),
+			size_t len = std::min(ring_buf_space_get(&ringbuf),
 					 sizeof(buffer));
 
 			if (len == 0) {
@@ -80,29 +73,28 @@ static void interrupt_handler(const struct device *dev, void *user_data)
 				continue;
 			}
 
-			recv_len = uart_fifo_read(dev, buffer, len);
-			if (recv_len < 0) {
+			int bytes_received = uart_fifo_read(dev, buffer, len);
+			if (bytes_received < 0) {
 				LOG_ERR("Failed to read UART FIFO");
-				recv_len = 0;
+				bytes_received = 0;
 			};
 
-			rb_len = ring_buf_put(&ringbuf, buffer, recv_len);
-			if (rb_len < recv_len) {
-				LOG_ERR("Drop %u bytes", recv_len - rb_len);
+			int bytes_written = ring_buf_put(&ringbuf, buffer, bytes_received);
+			if (bytes_written < bytes_received) {
+				LOG_ERR("Drop %u bytes", bytes_received - bytes_written);
 			}
 
-			LOG_DBG("tty fifo -> ringbuf %d bytes", rb_len);
-			if (rb_len) {
+			LOG_DBG("tty fifo -> ringbuf %d bytes", bytes_written);
+			if (bytes_written) {
 				uart_irq_tx_enable(dev);
 			}
 		}
 
 		if (uart_irq_tx_ready(dev)) {
 			uint8_t buffer[64];
-			int rb_len, send_len;
 
-			rb_len = ring_buf_get(&ringbuf, buffer, sizeof(buffer));
-			if (!rb_len) {
+			int bytes_read = ring_buf_get(&ringbuf, buffer, sizeof(buffer));
+			if (!bytes_read) {
 				LOG_DBG("Ring buffer empty, disable TX IRQ");
 				uart_irq_tx_disable(dev);
 				continue;
@@ -113,12 +105,12 @@ static void interrupt_handler(const struct device *dev, void *user_data)
 				rx_throttled = false;
 			}
 
-			send_len = uart_fifo_fill(dev, buffer, rb_len);
-			if (send_len < rb_len) {
-				LOG_ERR("Drop %d bytes", rb_len - send_len);
+			int bytes_tx = uart_fifo_fill(dev, buffer, bytes_read);
+			if (bytes_tx < bytes_read) {
+				LOG_ERR("Drop %d bytes", bytes_read - bytes_tx);
 			}
 
-			LOG_DBG("ringbuf -> tty fifo %d bytes", send_len);
+			LOG_DBG("ringbuf -> tty fifo %d bytes", bytes_tx);
 		}
 	}
 }
@@ -148,7 +140,7 @@ int main(void)
 		return 0;
 	}
 
-	ring_buf_init(&ringbuf, sizeof(ring_buffer), ring_buffer);
+	ring_buf_init(&ringbuf, ring_buffer.size(), ring_buffer.data());
 
 	LOG_INF("Wait for DTR");
 
@@ -164,11 +156,9 @@ int main(void)
 
 	LOG_INF("DTR set");
 
-	/* They are optional, we use them to test the interrupt endpoint */
 	if (int ret = uart_line_ctrl_set(dev, UART_LINE_CTRL_DCD, 1); ret) {
 		LOG_WRN("Failed to set DCD, ret code %d", ret);
 	}
-
 	if (int ret = uart_line_ctrl_set(dev, UART_LINE_CTRL_DSR, 1); ret) {
 		LOG_WRN("Failed to set DSR, ret code %d", ret);
 	}
