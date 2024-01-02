@@ -3,4 +3,6 @@
 #include <cstdint>
 #include "zephyr-usbd-wrapper.h"
 
-struct usbd_contex *sample_usbd_init_device(void);
+using UsbContext = struct usbd_contex;
+
+UsbContext *init_usb_device();

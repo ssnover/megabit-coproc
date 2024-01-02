@@ -33,7 +33,7 @@ USBD_CONFIGURATION_DEFINE(sample_config,
 			  attributes,
 			  125);
 
-struct usbd_contex *sample_usbd_init_device(void)
+struct usbd_contex *init_usb_device(void)
 {
 	int err;
 
