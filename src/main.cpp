@@ -13,18 +13,22 @@
  */
 
 #include "usb.hpp"
-
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdint>
+#include <cstring>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/ring_buffer.h>
 
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/usbd.h>
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(cdc_acm_echo, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(megabit, LOG_LEVEL_INF);
+
+#define LED0_NODE DT_ALIAS(led0)
+constexpr uint32_t SLEEP_TIME_MS(1000);
 
 #define RING_BUF_SIZE 1024
 uint8_t ring_buffer[RING_BUF_SIZE];
@@ -34,7 +38,7 @@ struct ring_buf ringbuf;
 static bool rx_throttled;
 
 #if defined(CONFIG_USB_DEVICE_STACK_NEXT)
-static struct usbd_contex *sample_usbd;
+static UsbContext *sample_usbd;
 
 static int enable_usb_device_next(void)
 {
@@ -119,8 +123,18 @@ static void interrupt_handler(const struct device *dev, void *user_data)
 	}
 }
 
+static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+
 int main(void)
 {
+    if (!gpio_is_ready_dt(&led)) {
+        return 0;
+    }
+
+    if (int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE); ret < 0) {
+        return 0;
+    }
+
 	const struct device *dev;
 	uint32_t baudrate, dtr = 0U;
 	int ret;
@@ -183,5 +197,14 @@ int main(void)
 
 	/* Enable rx interrupts */
 	uart_irq_rx_enable(dev);
+
+    bool led_state = true;
+    while (true) {
+        gpio_pin_toggle_dt(&led);
+        led_state = !led_state;
+        LOG_INF("LED state: %s", led_state ? "ON" : "OFF");
+        k_msleep(SLEEP_TIME_MS);
+    }
+
 	return 0;
 }
