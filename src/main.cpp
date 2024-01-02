@@ -1,16 +1,10 @@
 #include "usb.hpp"
-#include <algorithm>
-#include <array>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <zephyr/device.h>
-#include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
-#include <zephyr/sys/ring_buffer.h>
-#include <zephyr/usb/usb_device.h>
-#include <zephyr/usb/usbd.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(megabit, LOG_LEVEL_INF);
