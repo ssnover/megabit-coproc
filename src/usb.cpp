@@ -45,22 +45,22 @@ bool rx_throttled;
 
 static UsbContext * init_usb_device() {
 	if (int err = usbd_add_descriptor(&usb_serial_dev, &lang_desc); err) {
-		LOG_ERR("Failed to initialize language descriptor (%d)", err);
+		LOG_ERR("Failed to init_leds language descriptor (%d)", err);
 		return nullptr;
 	}
 
 	if (int err = usbd_add_descriptor(&usb_serial_dev, &mnfr_desc); err) {
-		LOG_ERR("Failed to initialize manufacturer descriptor (%d)", err);
+		LOG_ERR("Failed to init_leds manufacturer descriptor (%d)", err);
 		return nullptr;
 	}
 
 	if (int err = usbd_add_descriptor(&usb_serial_dev, &product_desc); err) {
-		LOG_ERR("Failed to initialize product descriptor (%d)", err);
+		LOG_ERR("Failed to init_leds product descriptor (%d)", err);
 		return nullptr;
 	}
 
 	if (int err = usbd_add_descriptor(&usb_serial_dev, &sn_desc); err) {
-		LOG_ERR("Failed to initialize SN descriptor (%d)", err);
+		LOG_ERR("Failed to init_leds SN descriptor (%d)", err);
 		return nullptr;
 	}
 	
@@ -89,7 +89,7 @@ static UsbContext * init_usb_device() {
     usbd_device_set_code_triple(&usb_serial_dev, USB_BCC_MISCELLANEOUS, 0x02, 0x01);
 
 	if (int err = usbd_init(&usb_serial_dev); err) {
-		LOG_ERR("Failed to initialize device support");
+		LOG_ERR("Failed to init_leds device support");
 		return nullptr;
 	}
 
@@ -103,7 +103,7 @@ UsbContext *usb_serial;
 int enable_usb_device_next() {
     usb_serial = init_usb_device();
     if (usb_serial == nullptr) {
-	    LOG_ERR("Failed to initialize USB device");
+	    LOG_ERR("Failed to init_leds USB device");
 	    return -ENODEV;
     }
 
