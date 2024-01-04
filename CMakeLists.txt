@@ -6,7 +6,8 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(megabit-coproc)
 
 target_sources(app
-  PRIVATE 
+  PRIVATE
+    src/led.cpp
     src/main.cpp
     src/usb.cpp
 )
