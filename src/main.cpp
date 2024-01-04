@@ -19,9 +19,12 @@ int main() {
     }
 
     bool led_state = true;
+    uint32_t counter = 1;
     while (true) {
         led_state = !led_state;
         led::set_state(led_state);
+        led::set_color(static_cast<led::Color>(counter & 0b11));
+        ++counter;
         LOG_INF("LED state: %s", led_state ? "ON" : "OFF");
         k_msleep(1000);
     }

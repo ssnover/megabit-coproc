@@ -5,9 +5,10 @@
 namespace led {
 
 enum Color : uint8_t {
-    Red,
-    Green,
-    Blue,
+    None = 0u,
+    Red = 1u,
+    Green = 2u,
+    Blue = 3u,
 };
 
 int init_leds();
