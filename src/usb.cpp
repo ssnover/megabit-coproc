@@ -1,19 +1,35 @@
+#include "ring-buffer.hpp"
 #include "usb.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/kernel.h>
+#include <zephyr/spinlock.h>
 #include <zephyr/sys/iterable_sections.h>
-#include <zephyr/sys/ring_buffer.h>
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/usbd.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(usb);
+
+using UsbContext = struct usbd_contex;
+
 namespace {
+
 constexpr uint16_t COPROC_USB_VID(0x16c0);
 constexpr uint16_t COPROC_USB_PID(0x27de);
+constexpr uint8_t ATTRIBUTES = (IS_ENABLED(CONFIG_SAMPLE_USBD_SELF_POWERED) ?
+				   USB_SCD_SELF_POWERED : 0) |
+				  (IS_ENABLED(CONFIG_SAMPLE_USBD_REMOTE_WAKEUP) ?
+				   USB_SCD_REMOTE_WAKEUP : 0);
+
+RingBuffer<uint8_t, 1024> usb_rx_buffer;
+UsbContext *usb_serial;
+struct k_spinlock usb_event_lock;
+K_EVENT_DEFINE(usb_events);
+
 } // anonymous
 
 USBD_DEVICE_DEFINE(usb_serial_dev,
@@ -23,25 +39,7 @@ USBD_DESC_LANG_DEFINE(lang_desc);
 USBD_DESC_MANUFACTURER_DEFINE(mnfr_desc, "Snostorm Labs");
 USBD_DESC_PRODUCT_DEFINE(product_desc, "Megabit coproc");
 USBD_DESC_SERIAL_NUMBER_DEFINE(sn_desc, "0123456789ABCDEF");
-
-using UsbContext = struct usbd_contex;
-
-namespace {
-constexpr uint8_t attributes = (IS_ENABLED(CONFIG_SAMPLE_USBD_SELF_POWERED) ?
-				   USB_SCD_SELF_POWERED : 0) |
-				  (IS_ENABLED(CONFIG_SAMPLE_USBD_REMOTE_WAKEUP) ?
-				   USB_SCD_REMOTE_WAKEUP : 0);
-} // anonymous
-USBD_CONFIGURATION_DEFINE(usb_cfg, attributes, 125);
-
-namespace {
-
-constexpr uint32_t RING_BUFFER_SIZE(1024);
-std::array<uint8_t, RING_BUFFER_SIZE> ring_buffer;
-struct ring_buf ringbuf;
-bool rx_throttled;
-
-} // anonymous
+USBD_CONFIGURATION_DEFINE(usb_cfg, ATTRIBUTES, 125);
 
 static UsbContext * init_usb_device() {
 	if (int err = usbd_add_descriptor(&usb_serial_dev, &lang_desc); err) {
@@ -98,8 +96,6 @@ static UsbContext * init_usb_device() {
 
 namespace {
 
-UsbContext *usb_serial;
-
 int enable_usb_device_next() {
     usb_serial = init_usb_device();
     if (usb_serial == nullptr) {
@@ -118,64 +114,21 @@ int enable_usb_device_next() {
 
 void usb_interrupt(const struct device * dev, void * /* user_data */) {
 	while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
-		if (!rx_throttled && uart_irq_rx_ready(dev)) {
-			uint8_t buffer[64];
-			size_t len = std::min(ring_buf_space_get(&ringbuf), sizeof(buffer));
-
-			if (len == 0) {
-				/* Throttle because ring buffer is full */
-                // TODO Send message when this occurs
-				uart_irq_rx_disable(dev);
-				rx_throttled = true;
-				continue;
-			}
-
-			int bytes_rx = uart_fifo_read(dev, buffer, len);
-			if (bytes_rx < 0) {
-				LOG_ERR("Failed to read UART FIFO");
-				bytes_rx = 0;
-			};
-
-			int bytes_written = ring_buf_put(&ringbuf, buffer, bytes_rx);
-			if (bytes_written < bytes_rx) {
-				LOG_ERR("Drop %u bytes", bytes_rx - bytes_written);
-			}
-
-			LOG_DBG("tty fifo -> ringbuf %d bytes", bytes_written);
-			if (bytes_written) {
-				uart_irq_tx_enable(dev);
-			}
+		if (uart_irq_rx_ready(dev)) {
+			// Post a receive event
+			k_event_post(&usb_events, 1u << 0);
 		}
 
 		if (uart_irq_tx_ready(dev)) {
-			uint8_t buffer[64];
-
-			int bytes_read = ring_buf_get(&ringbuf, buffer, sizeof(buffer));
-			if (!bytes_read) {
-				LOG_DBG("Ring buffer empty, disable TX IRQ");
-				uart_irq_tx_disable(dev);
-				continue;
-			}
-
-			if (rx_throttled) {
-				uart_irq_rx_enable(dev);
-				rx_throttled = false;
-			}
-
-			int bytes_tx = uart_fifo_fill(dev, buffer, bytes_read);
-			if (bytes_tx < bytes_read) {
-				LOG_ERR("Drop %d bytes", bytes_read - bytes_tx);
-			}
-
-			LOG_DBG("ringbuf -> tty fifo %d bytes", bytes_tx);
+			// Post a different event
+			k_event_post(&usb_events, 1u << 1);
 		}
 	}
 }
 
 } // anonymous
 
-int init_usb_stack() {
-    const struct device *dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+int init_usb_stack(const struct device * dev) {
 	if (!device_is_ready(dev)) {
 		LOG_ERR("CDC ACM device not ready");
 		return -ENODEV;
@@ -185,8 +138,6 @@ int init_usb_stack() {
 		LOG_ERR("Failed to enable USB");
 		return ret;
 	}
-
-	ring_buf_init(&ringbuf, ring_buffer.size(), ring_buffer.data());
 
 	LOG_INF("Wait for DTR");
 
@@ -222,6 +173,51 @@ int init_usb_stack() {
 
 	uart_irq_callback_set(dev, usb_interrupt);
 	uart_irq_rx_enable(dev);
+	uart_irq_tx_enable(dev);
 
     return 0;
 }
+
+int usb_task_main(void *, void *, void *) {
+	const struct device *dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+	if (init_usb_stack(dev) != 0) {
+		LOG_ERR("Failed to init USB stack");
+		while (true) {
+			k_msleep(100);
+		}
+	}
+
+	while (true) {
+		auto events = k_event_wait(&usb_events, 0xFFFF, false, K_MSEC(50));
+		if (events & (1u << 0)) {
+			// Received bytes event
+			K_SPINLOCK(&usb_event_lock) {
+				std::array<uint8_t, 64> buffer;
+				size_t len = std::min(usb_rx_buffer.space_in_buffer(), buffer.size());
+
+				if (len == 0) {
+					/* Throttle because ring buffer is full */
+					// TODO Send message when this occurs
+					continue;
+				}
+
+				int bytes_rx = uart_fifo_read(dev, buffer.data(), len);
+				if (bytes_rx < 0) {
+					LOG_ERR("Failed to read UART FIFO");
+					bytes_rx = 0;
+				};
+
+				int bytes_written = usb_rx_buffer.write(buffer.data(), bytes_rx);
+				if (bytes_written < bytes_rx) {
+					LOG_ERR("Drop %u bytes", bytes_rx - bytes_written);
+				}
+			}
+			// Now read data from the buffer to decode
+		}
+		if (events & (1u << 1)) {
+			// Transmitted bytes event
+		}
+	}
+}
+
+K_THREAD_DEFINE(usb_thread_id, 1024, usb_task_main, nullptr, nullptr, nullptr, 5, 0, 0);

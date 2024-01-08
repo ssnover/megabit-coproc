@@ -13,10 +13,6 @@ int main() {
         LOG_ERR("Failed to init LEDs: %d", ret);
         return 0;
     }
-    if (int ret = init_usb_stack(); ret != 0) {
-        LOG_ERR("Failed to init USB stack: %d", ret);
-        led::execute_panic_loop();
-    }
 
     bool led_state = true;
     uint32_t counter = 1;
