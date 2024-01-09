@@ -4,10 +4,10 @@
 #include <array>
 #include <cstdint>
 
-template <typename T, std::size_t N>
+template <std::size_t N>
 class RingBuffer {
 private:
-    std::array<T, N> inner_buffer;
+    std::array<uint8_t, N> inner_buffer;
     struct ring_buf inner;
 
 public:
@@ -20,11 +20,11 @@ public:
     }
     ~RingBuffer() = default;
 
-    std::size_t read(T * const output_buffer, std::size_t buffer_len) {
+    std::size_t read(uint8_t * const output_buffer, std::size_t buffer_len) {
         return ring_buf_get(&inner, output_buffer, buffer_len);
     }
 
-    std::size_t write(T * const input_buffer, std::size_t bytes_to_write) {
+    std::size_t write(uint8_t * const input_buffer, std::size_t bytes_to_write) {
         return ring_buf_put(&inner, input_buffer, bytes_to_write);
     }
 

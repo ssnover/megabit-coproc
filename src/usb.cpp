@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
@@ -25,7 +26,7 @@ constexpr uint8_t ATTRIBUTES = (IS_ENABLED(CONFIG_SAMPLE_USBD_SELF_POWERED) ?
 				  (IS_ENABLED(CONFIG_SAMPLE_USBD_REMOTE_WAKEUP) ?
 				   USB_SCD_REMOTE_WAKEUP : 0);
 
-RingBuffer<uint8_t, 1024> usb_rx_buffer;
+RingBuffer<1024> usb_rx_buffer;
 UsbContext *usb_serial;
 struct k_spinlock usb_event_lock;
 K_EVENT_DEFINE(usb_events);
