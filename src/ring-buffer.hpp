@@ -1,10 +1,11 @@
 #pragma once
 
+#include "types.hpp"
 #include <zephyr/sys/ring_buffer.h>
 #include <array>
 #include <cstdint>
 
-template <std::size_t N>
+template <usize N>
 class RingBuffer {
 private:
     std::array<uint8_t, N> inner_buffer;
@@ -20,15 +21,15 @@ public:
     }
     ~RingBuffer() = default;
 
-    std::size_t read(uint8_t * const output_buffer, std::size_t buffer_len) {
+    usize read(uint8_t * const output_buffer, usize buffer_len) {
         return ring_buf_get(&inner, output_buffer, buffer_len);
     }
 
-    std::size_t write(uint8_t * const input_buffer, std::size_t bytes_to_write) {
+    usize write(uint8_t * const input_buffer, usize bytes_to_write) {
         return ring_buf_put(&inner, input_buffer, bytes_to_write);
     }
 
-    std::size_t space_in_buffer() {
+    usize space_in_buffer() {
         return ring_buf_space_get(&inner);
     }
 

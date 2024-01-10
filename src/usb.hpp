@@ -1,4 +1,4 @@
 #pragma once
 
-#include <cstdint>
+#include "types.hpp"
 #include "zephyr-usbd-wrapper.h"

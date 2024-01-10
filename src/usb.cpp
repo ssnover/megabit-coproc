@@ -194,7 +194,7 @@ int usb_task_main(void *, void *, void *) {
 			// Received bytes event
 			K_SPINLOCK(&usb_event_lock) {
 				std::array<uint8_t, 64> buffer;
-				size_t len = std::min(usb_rx_buffer.space_in_buffer(), buffer.size());
+				usize len = std::min(usb_rx_buffer.space_in_buffer(), buffer.size());
 
 				if (len == 0) {
 					/* Throttle because ring buffer is full */

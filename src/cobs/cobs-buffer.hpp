@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cobs-decoder.hpp"
+#include "types.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -13,18 +14,18 @@ enum class DecodeError {
 
 /// Implements a ring buffer of size N for COBS-encoded data and supports reading
 /// individually decoded packets.
-template <std::size_t N>
+template <usize N>
 class CobsBuffer {
 private:
     std::array<uint8_t, N> _inner;
-    usize_t _write_idx;
-    usize_t _read_idx;
+    usize _write_idx;
+    usize _read_idx;
 
 public:
     CobsBuffer() = default;
     ~CobsBuffer() = default;
 
-    usize_t available_to_read() {
+    usize available_to_read() {
         if (_read_idx == _write_idx) {
             return 0;
         } else if (_read_idx > _write_idx) {
@@ -34,12 +35,22 @@ public:
         }
     }
 
+    usize available_to_write() {
+        if (_read_idx == _write_idx) {
+            return N;
+        } else if (_read_idx > _write_idx) {
+            return _read_idx - _write_idx;
+        } else {
+            return N - _write_idx + _read_idx; 
+        }
+    }
+
     /// Reads COBS-encoded bytes up to the lesser of the available amount or `output_len`.
-    usize_t read_bytes(uint8_t * const output_buffer, size_t output_len) {
+    usize read_bytes(uint8_t * const output_buffer, usize output_len) {
         if (_read_idx == _write_idx) {
             return 0;
         } else if (_read_idx > _write_idx) {
-            usize_t bytes_read = 0;
+            usize bytes_read = 0;
             for (auto i = _read_idx; i < std::min(N, _read_idx + output_len); ++i) {
                 output_buffer[bytes_read] = _inner[i];
                 bytes_read += 1;
@@ -57,7 +68,7 @@ public:
             }
             return bytes_read;
         } else {
-            usize_t bytes_read = 0;
+            usize bytes_read = 0;
             for (auto i = _read_idx; i < std::min(_write_idx, _read_idx + output_len); ++i) {
                 output_buffer[bytes_read] = _inner[i];
                 bytes_read += 1;
@@ -70,11 +81,11 @@ public:
     /// Decodes a single COBS-encoded section of the buffer and returns the resulting decoded
     /// packet as bytes in the output parameter `buf`. Returns the length of the decoded bytes.
     /// If an error occurs, the error is returned instead represented by `DecodeError`.
-    size_t read_packet(uint8_t * const buf, usize_t buf_len) {
-        size_t ret_val = 0;
+    isize read_packet(uint8_t * const buf, usize buf_len) {
+        isize ret_val = 0;
         CobsDecoder decoder{buf, buf_len};
         if (_read_idx == _write_idx) {
-            ret_val = static_cast<size_t>(DecodeError::NoBytes);
+            ret_val = static_cast<isize>(DecodeError::NoBytes);
         } else if (_read_idx > _write_idx) {
             auto res = decoder.push(_inner.data() + _read_idx, N - _read_idx);
             if (res.has_value()) {
@@ -94,7 +105,7 @@ public:
                             _read_idx = m;
                             ret_val = n;
                         } else {
-                            ret_val = static_cast<size_t>(DecodeError::MsgIncomplete);
+                            ret_val = static_cast<isize>(DecodeError::MsgIncomplete);
                         }
                     } else {
                         auto n_bytes = res2.error();
@@ -102,7 +113,7 @@ public:
                         if (_read_idx >= N) {
                             _read_idx -= N;
                         }
-                        ret_val = static_cast<size_t>(DecodeError::UnknownDecodeErr);
+                        ret_val = static_cast<isize>(DecodeError::UnknownDecodeErr);
                     }
                 }
             } else {
@@ -111,15 +122,46 @@ public:
                 if (_read_idx >= N) {
                     _read_idx -= N;
                 }
-                ret_val = static_cast<size_t>(DecodeError::UnknownDecodeErr);
+                ret_val = static_cast<isize>(DecodeError::UnknownDecodeErr);
             }
         }
 
         return ret_val;
     }
 
-    usize_t write_bytes(uint8_t const * const buf, usize_t len) {
-        // TODO
-        return 0;
+    /// Writes COBS-encoded bytes into the ring buffer. The buffer will overwrite in
+    /// the event that the data is larger than available space. Returns the number of
+    /// bytes written.
+    usize write_bytes(uint8_t const * const buf, usize len) {
+        usize available = this->available_to_write();
+        usize bytes_written = 0;
+        if ((N - _write_idx) > len) {
+            for (auto i = 0u; i < len; ++i) {
+                _inner[_write_idx] = buf[i];
+                _write_idx += 1;
+                bytes_written += 1;
+            }
+        } else {
+            for (auto i = 0u; i < (N - _write_idx); ++i) {
+                _inner[_write_idx] = buf[i];
+                _write_idx += 1;
+                bytes_written += 1;
+            }
+            _write_idx = 0;
+            for (auto i = bytes_written; i < len; ++i) {
+                _inner[_write_idx] = buf[i];
+                _write_idx += 1;
+                bytes_written += 1;
+            }
+        }
+
+        if (available < len) {
+            _read_idx = _write_idx + 1;
+            if (_read_idx >= N) {
+                _read_idx = 0;
+            }
+        }
+
+        return bytes_written;
     }
 }

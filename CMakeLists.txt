@@ -7,6 +7,7 @@ project(megabit-coproc)
 
 target_sources(app
   PRIVATE
+    src/cobs/cobs-decoder.cpp
     src/led.cpp
     src/main.cpp
     src/usb.cpp
@@ -14,4 +15,5 @@ target_sources(app
 target_include_directories(app
   PRIVATE
     src
+    third-party
 )

@@ -1,10 +1,10 @@
 #pragma once
 
-#include <cstdint>
+#include "types.hpp"
 
 namespace led {
 
-enum Color : uint8_t {
+enum Color : u8 {
     None = 0u,
     Red = 1u,
     Green = 2u,
