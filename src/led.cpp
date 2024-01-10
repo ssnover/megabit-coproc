@@ -16,7 +16,7 @@ const struct gpio_dt_spec SIMPLE_LED = GPIO_DT_SPEC_GET(DT_ALIAS(led4), gpios);
 const struct pwm_dt_spec RED_PWM_LED = PWM_DT_SPEC_GET(DT_ALIAS(red_pwm_led));
 const struct pwm_dt_spec GREEN_PWM_LED = PWM_DT_SPEC_GET(DT_ALIAS(green_pwm_led));
 const struct pwm_dt_spec BLUE_PWM_LED = PWM_DT_SPEC_GET(DT_ALIAS(blue_pwm_led));
-constexpr uint32_t PWM_STEP_SIZE_US = PWM_USEC(2000);
+constexpr u32 PWM_STEP_SIZE_US = PWM_USEC(2000);
 constexpr float MAX_BRIGHTNESS_DIM_RATIO(0.75);
 
 } // namespace
@@ -78,8 +78,8 @@ int set_color(Color color) {
 }
 
 void execute_panic_loop() {
-    constexpr uint32_t PANIC_SHORT_HALF_PERIOD_MS(100);
-    constexpr uint32_t PANIC_LONG_HALF_PERIOD_MS(700);
+    constexpr u32 PANIC_SHORT_HALF_PERIOD_MS(100);
+    constexpr u32 PANIC_LONG_HALF_PERIOD_MS(700);
     while (true) {
         for (auto i = 0u; i < 3; ++i) {
             set_state(true);

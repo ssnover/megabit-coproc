@@ -16,21 +16,21 @@ enum class DecoderState {
 
 class CobsDecoder {
 private:
-    uint8_t * const _dest;
+    u8 * const _dest;
     usize _dest_len;
     usize _dest_idx;
     DecoderState _state;
-    uint8_t _state_data;
+    u8 _state_data;
 
 public:
-    CobsDecoder(uint8_t * const dest, usize dest_len);
+    CobsDecoder(u8 * const dest, usize dest_len);
     ~CobsDecoder() = default;
 
     nonstd::expected<std::optional<std::tuple<usize, usize>>, usize> 
         push(
-            uint8_t const * const cobs_data, 
+            u8 const * const cobs_data, 
             usize data_len
         );
 
-    nonstd::expected<std::optional<usize>, usize> feed(uint8_t data);
+    nonstd::expected<std::optional<usize>, usize> feed(u8 data);
 };

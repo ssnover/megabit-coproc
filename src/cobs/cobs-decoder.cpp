@@ -7,9 +7,9 @@ enum class DecodeResultKind {
     DataComplete,
     DataContinue
 };
-using DecodeResult = std::tuple<DecodeResultKind, uint8_t>;
+using DecodeResult = std::tuple<DecodeResultKind, u8>;
 
-nonstd::expected<DecodeResult, uint8_t> _feed(DecoderState& state, uint8_t& state_data, uint8_t incoming_data) {
+nonstd::expected<DecodeResult, u8> _feed(DecoderState& state, u8& state_data, u8 incoming_data) {
     if (state == DecoderState::Idle && incoming_data == 0x00) {
         state = DecoderState::Idle;
         state_data = 0x00;
@@ -70,7 +70,7 @@ nonstd::expected<DecodeResult, uint8_t> _feed(DecoderState& state, uint8_t& stat
 
 } // anonymous
 
-CobsDecoder::CobsDecoder(uint8_t * const dest, usize dest_len)
+CobsDecoder::CobsDecoder(u8 * const dest, usize dest_len)
     : _dest(dest),
       _dest_len(dest_len),
       _dest_idx(0),
@@ -80,7 +80,7 @@ CobsDecoder::CobsDecoder(uint8_t * const dest, usize dest_len)
 }
 
 nonstd::expected<std::optional<std::tuple<usize, usize>>, usize>
-    CobsDecoder::push(uint8_t const * const cobs_data, usize data_len) {
+    CobsDecoder::push(u8 const * const cobs_data, usize data_len) {
     for (auto i = 0u; i < data_len; ++i) {
         auto res = this->feed(cobs_data[i]);
         if (res.has_value()) {
@@ -96,7 +96,7 @@ nonstd::expected<std::optional<std::tuple<usize, usize>>, usize>
     return {std::nullopt};
 }
 
-nonstd::expected<std::optional<usize>, usize> CobsDecoder::feed(uint8_t data) {
+nonstd::expected<std::optional<usize>, usize> CobsDecoder::feed(u8 data) {
     auto res = _feed(this->_state, this->_state_data, data);
     if (res.has_value()) {
         auto decode_res = std::get<0>(res.value());

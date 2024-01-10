@@ -143,7 +143,7 @@ int init_usb_stack(const struct device * dev) {
 	LOG_INF("Wait for DTR");
 
 	while (true) {
-        uint32_t dtr = 0;
+        u32 dtr = 0;
 		uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
 		if (dtr) {
 			break;
@@ -165,7 +165,7 @@ int init_usb_stack(const struct device * dev) {
 	/* Wait 100ms for the host to do all settings */
 	k_msleep(100);
 
-    uint32_t baudrate = 0;
+    u32 baudrate = 0;
 	if (int ret = uart_line_ctrl_get(dev, UART_LINE_CTRL_BAUD_RATE, &baudrate); ret) {
 		LOG_WRN("Failed to get baudrate, ret code %d", ret);
 	} else {
@@ -179,7 +179,7 @@ int init_usb_stack(const struct device * dev) {
     return 0;
 }
 
-int usb_task_main(void *, void *, void *) {
+int usb_task_main() {
 	const struct device *dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 	if (init_usb_stack(dev) != 0) {
 		LOG_ERR("Failed to init USB stack");
@@ -193,7 +193,7 @@ int usb_task_main(void *, void *, void *) {
 		if (events & (1u << 0)) {
 			// Received bytes event
 			K_SPINLOCK(&usb_event_lock) {
-				std::array<uint8_t, 64> buffer;
+				std::array<u8, 64> buffer;
 				usize len = std::min(usb_rx_buffer.space_in_buffer(), buffer.size());
 
 				if (len == 0) {

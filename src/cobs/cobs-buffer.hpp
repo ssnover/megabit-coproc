@@ -17,7 +17,7 @@ enum class DecodeError {
 template <usize N>
 class CobsBuffer {
 private:
-    std::array<uint8_t, N> _inner;
+    std::array<u8, N> _inner;
     usize _write_idx;
     usize _read_idx;
 
@@ -46,7 +46,7 @@ public:
     }
 
     /// Reads COBS-encoded bytes up to the lesser of the available amount or `output_len`.
-    usize read_bytes(uint8_t * const output_buffer, usize output_len) {
+    usize read_bytes(u8 * const output_buffer, usize output_len) {
         if (_read_idx == _write_idx) {
             return 0;
         } else if (_read_idx > _write_idx) {
@@ -81,7 +81,7 @@ public:
     /// Decodes a single COBS-encoded section of the buffer and returns the resulting decoded
     /// packet as bytes in the output parameter `buf`. Returns the length of the decoded bytes.
     /// If an error occurs, the error is returned instead represented by `DecodeError`.
-    isize read_packet(uint8_t * const buf, usize buf_len) {
+    isize read_packet(u8 * const buf, usize buf_len) {
         isize ret_val = 0;
         CobsDecoder decoder{buf, buf_len};
         if (_read_idx == _write_idx) {
@@ -132,7 +132,7 @@ public:
     /// Writes COBS-encoded bytes into the ring buffer. The buffer will overwrite in
     /// the event that the data is larger than available space. Returns the number of
     /// bytes written.
-    usize write_bytes(uint8_t const * const buf, usize len) {
+    usize write_bytes(u8 const * const buf, usize len) {
         usize available = this->available_to_write();
         usize bytes_written = 0;
         if ((N - _write_idx) > len) {

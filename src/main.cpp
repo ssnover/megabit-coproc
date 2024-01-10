@@ -15,7 +15,7 @@ int main() {
     }
 
     bool led_state = true;
-    uint32_t counter = 1;
+    u32 counter = 1;
     while (true) {
         led_state = !led_state;
         led::set_state(led_state);
